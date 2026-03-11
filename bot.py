@@ -1,10 +1,11 @@
 import requests
 from telegram import Bot
 import time
+import os
 
-TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
-CHAT_ID = "YOUR_CHAT_ID"
-NEWS_API = "YOUR_NEWSAPI_KEY"
+TOKEN = os.getenv("BOT_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
+NEWS_API = os.getenv("NEWS_API")
 
 bot = Bot(token=TOKEN)
 
@@ -25,5 +26,5 @@ def get_news():
 while True:
     news = get_news()
     bot.send_message(chat_id=CHAT_ID, text=news)
-    
+
     time.sleep(3600)
