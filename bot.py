@@ -1,3 +1,7 @@
+import sys
+import types
+sys.modules['imghdr'] = types.ModuleType('imghdr')
+
 import os
 import requests
 import time
@@ -35,7 +39,7 @@ def get_news():
 
     articles = data["articles"][:5]
 
-    news = "📰 *Today's Top News*\n\n"
+    news = "📰 Today's Top News\n\n"
 
     for a in articles:
         title = a["title"]
