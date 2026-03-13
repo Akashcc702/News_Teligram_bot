@@ -1,7 +1,8 @@
 python-telegram-bot==13.15
 Flask
 requests
-openai
 apscheduler
+feedparser
 urllib3==1.26.18
 six
+openai
