@@ -1,19 +1,20 @@
 import os
 import requests
 import feedparser
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
-from apscheduler.schedulers.background import BackgroundScheduler
+import pytz
 from flask import Flask
 from threading import Thread
+from apscheduler.schedulers.background import BackgroundScheduler
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 NEWS_API = os.getenv("NEWS_API")
 CHAT_ID = os.getenv("CHAT_ID")
 
-updater = Updater(BOT_TOKEN, use_context=True)
-dp = updater.dispatcher
+app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-# ---------- NEWS ----------
+# ---------------- NEWS FUNCTION ----------------
 def get_news(category):
     url = f"https://newsapi.org/v2/top-headlines?category={category}&language=en&apiKey={NEWS_API}"
     data = requests.get(url).json()
@@ -24,88 +25,116 @@ def get_news(category):
         msg += f"📰 {a['title']}\n{a['url']}\n\n"
     return msg
 
-# ---------- COMMANDS ----------
-def start(update, context):
-    update.message.reply_text("🇮🇳 Ultimate India Info Bot Ready 🚀")
+# ---------------- COMMANDS ----------------
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🚀 ULTRA India Info Bot Ready")
 
-def tech(update, context):
-    update.message.reply_text(get_news("technology"))
+async def tech(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(get_news("technology"))
 
-def sports(update, context):
-    update.message.reply_text(get_news("sports"))
+async def sports(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(get_news("sports"))
 
-def crypto(update, context):
+async def crypto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = f"https://newsapi.org/v2/everything?q=crypto&apiKey={NEWS_API}"
     data = requests.get(url).json()
+
     msg = "💰 Crypto News\n\n"
     for a in data["articles"][:5]:
         msg += f"{a['title']}\n{a['url']}\n\n"
-    update.message.reply_text(msg)
 
-# ---------- TRENDING ----------
-def trending(update, context):
+    await update.message.reply_text(msg)
+
+# ---------------- TRENDING ----------------
+async def trending(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = f"https://newsapi.org/v2/everything?q=india&sortBy=popularity&apiKey={NEWS_API}"
     data = requests.get(url).json()
+
     msg = "🔥 Trending India News\n\n"
     for a in data["articles"][:5]:
         msg += f"{a['title']}\n{a['url']}\n\n"
-    update.message.reply_text(msg)
 
-# ---------- GOVT JOB ----------
-def govtjobs(update, context):
+    await update.message.reply_text(msg)
+
+# ---------------- GOVT JOB ----------------
+async def govtjobs(update: Update, context: ContextTypes.DEFAULT_TYPE):
     feed = feedparser.parse("https://www.freejobalert.com/rss.xml")
-    msg = "🇮🇳 Latest Govt Jobs\n\n"
+
+    msg = "🇮🇳 Govt Jobs\n\n"
     for e in feed.entries[:5]:
         msg += f"{e.title}\n{e.link}\n\n"
-    update.message.reply_text(msg)
 
-# ---------- SCHOLARSHIP ----------
-def scholarship(update, context):
+    await update.message.reply_text(msg)
+
+# ---------------- SCHOLARSHIP ----------------
+async def scholarship(update: Update, context: ContextTypes.DEFAULT_TYPE):
     feed = feedparser.parse("https://www.scholarships.gov.in/rss")
+
     msg = "🎓 Govt Scholarships\n\n"
     for e in feed.entries[:5]:
         msg += f"{e.title}\n{e.link}\n\n"
-    update.message.reply_text(msg)
 
-# ---------- CRYPTO PRICE ----------
-def btc(update, context):
+    await update.message.reply_text(msg)
+
+# ---------------- BTC PRICE ----------------
+async def btc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = requests.get("https://api.coindesk.com/v1/bpi/currentprice/BTC.json").json()
     price = data["bpi"]["USD"]["rate"]
-    update.message.reply_text(f"💰 BTC Price: ${price}")
 
-# ---------- AUTO NEWS ----------
+    await update.message.reply_text(f"💰 BTC Price: ${price}")
+
+# ---------------- AI REPLY ----------------
+async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    await update.message.reply_text(f"🤖 AI: {text}")
+
+# ---------------- AUTO NEWS ----------------
 def auto_news():
-    msg = get_news("technology")
-    updater.bot.send_message(chat_id=CHAT_ID, text="🔥 Auto Tech News\n\n"+msg)
+    url = f"https://newsapi.org/v2/top-headlines?category=technology&language=en&apiKey={NEWS_API}"
+    data = requests.get(url).json()
 
-scheduler = BackgroundScheduler()
+    msg = "🔥 Auto Tech News\n\n"
+    for a in data["articles"][:5]:
+        msg += f"{a['title']}\n{a['url']}\n\n"
+
+    requests.post(
+        f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+        data={"chat_id": CHAT_ID, "text": msg}
+    )
+
+scheduler = BackgroundScheduler(timezone=pytz.utc)
 scheduler.add_job(auto_news, "interval", minutes=30)
 scheduler.start()
 
-# ---------- AI REPLY ----------
-def chat(update, context):
-    text = update.message.text
-    update.message.reply_text("🤖 AI: " + text)
+# ---------------- HANDLERS ----------------
+app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("tech", tech))
+app.add_handler(CommandHandler("sports", sports))
+app.add_handler(CommandHandler("crypto", crypto))
+app.add_handler(CommandHandler("trending", trending))
+app.add_handler(CommandHandler("govtjobs", govtjobs))
+app.add_handler(CommandHandler("scholarship", scholarship))
+app.add_handler(CommandHandler("btc", btc))
 
-# ---------- HANDLERS ----------
-dp.add_handler(CommandHandler("start", start))
-dp.add_handler(CommandHandler("tech", tech))
-dp.add_handler(CommandHandler("sports", sports))
-dp.add_handler(CommandHandler("crypto", crypto))
-dp.add_handler(CommandHandler("trending", trending))
-dp.add_handler(CommandHandler("govtjobs", govtjobs))
-dp.add_handler(CommandHandler("scholarship", scholarship))
-dp.add_handler(CommandHandler("btc", btc))
+app.add_handler(MessageHandler(filters.TEXT, chat))
 
-dp.add_handler(MessageHandler(Filters.text, chat))
+# ---------------- WEB SERVER ----------------
+flask_app = Flask(__name__)
 
-# ---------- SERVER ----------
-app = Flask(__name__)
-
-@app.route("/")
+@flask_app.route("/")
 def home():
-    return "India Info Bot Running 🚀"
+    return "ULTRA Telegram Bot Running 🚀"
 
+def run():
+    flask_app.run(host="0.0.0.0", port=10000)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
+keep_alive()
+
+app.run_polling()
 def run():
     app.run(host="0.0.0.0", port=10000)
 
