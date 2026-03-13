@@ -6,4 +6,3 @@ feedparser
 openai
 urllib3==1.26.18
 six
-imghdr
