@@ -1,111 +1,114 @@
 import os
 import requests
-import feedparser
-import pytz
 from flask import Flask
 from threading import Thread
-from apscheduler.schedulers.background import BackgroundScheduler
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+from telegram.ext import Updater, CommandHandler
+from datetime import datetime
+import time
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+# ---------------- WEB SERVER ----------------
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "🔥 Ultimate News Bot Running"
+
+def run():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
+# ---------------- CONFIG ----------------
+TOKEN = os.getenv("BOT_TOKEN")
 NEWS_API = os.getenv("NEWS_API")
 CHAT_ID = os.getenv("CHAT_ID")
 
-app = ApplicationBuilder().token(BOT_TOKEN).build()
-
 # ---------------- NEWS FUNCTION ----------------
-def get_news(category):
-    url = f"https://newsapi.org/v2/top-headlines?category={category}&language=en&apiKey={NEWS_API}"
-    data = requests.get(url).json()
-    articles = data["articles"][:5]
+def fetch_news(category=None, query=None):
 
-    msg = ""
+    if category:
+        url = f"https://newsapi.org/v2/top-headlines?country=in&category={category}&apiKey={NEWS_API}"
+    elif query:
+        url = f"https://newsapi.org/v2/everything?q={query}&sortBy=publishedAt&apiKey={NEWS_API}"
+    else:
+        url = f"https://newsapi.org/v2/top-headlines?country=in&apiKey={NEWS_API}"
+
+    r = requests.get(url)
+    data = r.json()
+
+    articles = data.get("articles", [])[:5]
+
+    news = "📰 *Latest News*\n\n"
+
     for a in articles:
-        msg += f"📰 {a['title']}\n{a['url']}\n\n"
-    return msg
+        news += f"{a['title']}\n{a['url']}\n\n"
+
+    return news
 
 # ---------------- COMMANDS ----------------
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🚀 ULTRA India Info Bot Ready")
-
-async def tech(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(get_news("technology"))
-
-async def sports(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(get_news("sports"))
-
-async def crypto(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    url = f"https://newsapi.org/v2/everything?q=crypto&apiKey={NEWS_API}"
-    data = requests.get(url).json()
-
-    msg = "💰 Crypto News\n\n"
-    for a in data["articles"][:5]:
-        msg += f"{a['title']}\n{a['url']}\n\n"
-
-    await update.message.reply_text(msg)
-
-# ---------------- TRENDING ----------------
-async def trending(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    url = f"https://newsapi.org/v2/everything?q=india&sortBy=popularity&apiKey={NEWS_API}"
-    data = requests.get(url).json()
-
-    msg = "🔥 Trending India News\n\n"
-    for a in data["articles"][:5]:
-        msg += f"{a['title']}\n{a['url']}\n\n"
-
-    await update.message.reply_text(msg)
-
-# ---------------- GOVT JOB ----------------
-async def govtjobs(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    feed = feedparser.parse("https://www.freejobalert.com/rss.xml")
-
-    msg = "🇮🇳 Govt Jobs\n\n"
-    for e in feed.entries[:5]:
-        msg += f"{e.title}\n{e.link}\n\n"
-
-    await update.message.reply_text(msg)
-
-# ---------------- SCHOLARSHIP ----------------
-async def scholarship(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    feed = feedparser.parse("https://www.scholarships.gov.in/rss")
-
-    msg = "🎓 Govt Scholarships\n\n"
-    for e in feed.entries[:5]:
-        msg += f"{e.title}\n{e.link}\n\n"
-
-    await update.message.reply_text(msg)
-
-# ---------------- BTC PRICE ----------------
-async def btc(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    data = requests.get("https://api.coindesk.com/v1/bpi/currentprice/BTC.json").json()
-    price = data["bpi"]["USD"]["rate"]
-
-    await update.message.reply_text(f"💰 BTC Price: ${price}")
-
-# ---------------- AI REPLY ----------------
-async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-    await update.message.reply_text(f"🤖 AI: {text}")
-
-# ---------------- AUTO NEWS ----------------
-def auto_news():
-    url = f"https://newsapi.org/v2/top-headlines?category=technology&language=en&apiKey={NEWS_API}"
-    data = requests.get(url).json()
-
-    msg = "🔥 Auto Tech News\n\n"
-    for a in data["articles"][:5]:
-        msg += f"{a['title']}\n{a['url']}\n\n"
-
-    requests.post(
-        f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-        data={"chat_id": CHAT_ID, "text": msg}
+def start(update, context):
+    update.message.reply_text(
+        "🔥 Welcome to Ultimate News Bot\n\n"
+        "Commands:\n"
+        "/tech\n/sports\n/crypto\n/india\n/business"
     )
 
-scheduler = BackgroundScheduler(timezone=pytz.utc)
-scheduler.add_job(auto_news, "interval", minutes=30)
-scheduler.start()
+def tech(update, context):
+    update.message.reply_text(fetch_news(category="technology"))
 
+def sports(update, context):
+    update.message.reply_text(fetch_news(category="sports"))
+
+def india(update, context):
+    update.message.reply_text(fetch_news())
+
+def business(update, context):
+    update.message.reply_text(fetch_news(category="business"))
+
+def crypto(update, context):
+    update.message.reply_text(fetch_news(query="crypto"))
+
+# ---------------- AUTO NEWS SYSTEM ----------------
+def auto_news(bot):
+    while True:
+        now = datetime.now()
+
+        # Morning 8 AM
+        if now.hour == 8 and now.minute == 0:
+            bot.send_message(chat_id=CHAT_ID, text="🌅 Morning News\n\n" + fetch_news())
+
+        # Every 6 hours
+        if now.hour % 6 == 0 and now.minute == 0:
+            bot.send_message(chat_id=CHAT_ID, text="⏰ Auto Update\n\n" + fetch_news())
+
+        time.sleep(60)
+
+# ---------------- BOT START ----------------
+def start_bot():
+    updater = Updater(TOKEN, use_context=True)
+    dp = updater.dispatcher
+
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("tech", tech))
+    dp.add_handler(CommandHandler("sports", sports))
+    dp.add_handler(CommandHandler("crypto", crypto))
+    dp.add_handler(CommandHandler("india", india))
+    dp.add_handler(CommandHandler("business", business))
+
+    updater.start_polling()
+
+    # Auto news thread
+    Thread(target=auto_news, args=(updater.bot,)).start()
+
+    updater.idle()
+
+# ---------------- RUN ----------------
+keep_alive()
+
+Thread(target=start_bot).start()
 # ---------------- HANDLERS ----------------
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("tech", tech))
